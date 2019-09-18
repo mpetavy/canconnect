@@ -18,7 +18,7 @@ var (
 )
 
 func init() {
-	common.Init("canconnect", "1.0.0", "2019", "Can connect to server:port", "mpetavy", common.APACHE, "https://github.com/mpetavy/canconnect", false, nil, nil, run, 0)
+	common.Init("1.0.0", "2019", "Can connect to server:port", "mpetavy", common.APACHE, false, nil, nil, run, 0)
 
 	address = flag.String("c", "", "server:port to test")
 }
