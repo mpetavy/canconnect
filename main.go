@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,6 @@ import (
 
 var (
 	address *string
-	udp     *bool
 )
 
 func init() {
@@ -24,19 +24,19 @@ func init() {
 }
 
 func run() error {
-	p := strings.Index(*address, "/")
+	port := -1
 
-	if p == -1 {
-		conn, err := net.Dial("tcp", *address)
+	p := strings.Index(*address, ":")
+
+	if p != -1 {
+		var err error
+
+		port, err = strconv.Atoi((*address)[p+1:])
 		if err != nil {
 			return err
 		}
 
-		defer conn.Close()
-
-		fmt.Printf("%s connected successfully ", *address)
-
-		return nil
+		*address = (*address)[:p]
 	}
 
 	var ip net.IP
@@ -73,11 +73,11 @@ func run() error {
 
 		go func(pingIp string) {
 			defer func() {
-				common.Debug("Ping %s ended\n", pingIp)
+				common.Debug("%s ended\n", pingIp)
 				wg.Done()
 			}()
 
-			common.Debug("Ping %s ...\n", pingIp)
+			common.Debug("%s ...\n", pingIp)
 
 			cmd := exec.Command("ping.exe", "-n", "1", pingIp)
 
@@ -92,6 +92,19 @@ func run() error {
 				}
 			}
 
+			pingIp = fmt.Sprintf("%s:%d", pingIp, port)
+
+			if port != -1 {
+				conn, err := net.Dial("tcp", pingIp)
+				if err != nil {
+					return
+				}
+
+				defer func() {
+					common.DebugError(conn.Close())
+				}()
+			}
+
 			successIps <- pingIp
 		}(pingIp)
 	}
@@ -101,7 +114,7 @@ func run() error {
 	close(successIps)
 
 	for ip := range successIps {
-		common.Info("Ping %s successfull\n", ip)
+		common.Info("%s\n", ip)
 	}
 
 	return nil
