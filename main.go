@@ -101,7 +101,7 @@ func run() error {
 				}
 
 				defer func() {
-					common.DebugError(conn.Close())
+					common.WarnError(conn.Close())
 				}()
 			}
 
