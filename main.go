@@ -37,31 +37,54 @@ func run() error {
 		}
 
 		*address = (*address)[:p]
+
+		if *address == "" {
+			*address = "127.0.0.1"
+		}
 	}
 
 	var ip net.IP
 	var ipNet *net.IPNet
+	var lastIp net.IP
 
-	ip, ipNet, err := net.ParseCIDR(*address)
-	if err != nil {
-		panic(err)
+	if strings.Index(*address, "/") != -1 {
+		var err error
+
+		ip, ipNet, err = net.ParseCIDR(*address)
+		if err != nil {
+			return err
+		}
+
+		ip = ip.To4()
+
+		ones, bits := ipNet.Mask.Size()
+		mask := net.CIDRMask(ones, bits)
+
+		lastIp := net.IP(make([]byte, 4))
+		for i := range ip {
+			lastIp[i] = ip[i] | ^mask[i]
+		}
+
+		if lastIp[3] == 255 {
+			lastIp[3]--
+		}
+	} else {
+		addresses, err := net.LookupHost(*address)
+		if err != nil {
+			return err
+		}
+
+		for i := 0; i < len(addresses); i++ {
+			ip = net.ParseIP(addresses[i]).To4()
+
+			if ip != nil {
+				break
+			}
+		}
+		lastIp = ip.To4()
 	}
 
-	ip = ip.To4()
-
-	ones, bits := ipNet.Mask.Size()
-	mask := net.CIDRMask(ones, bits)
-
-	lastIp := net.IP(make([]byte, 4))
-	for i := range ip {
-		lastIp[i] = ip[i] | ^mask[i]
-	}
-
-	if lastIp[3] == 255 {
-		lastIp[3]--
-	}
-
-	successIps := make(chan string, lastIp[3])
+	successIps := make(chan string, 1000)
 	wg := sync.WaitGroup{}
 
 	var i byte
