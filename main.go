@@ -104,7 +104,7 @@ func run() error {
 
 			cmd := exec.Command("ping.exe", "-n", "1", pingIp)
 
-			err := common.Watchdog(cmd, time.Second)
+			err := common.WatchdogCmd(cmd, time.Second)
 			if err != nil {
 				if _, ok := err.(*exec.ExitError); ok {
 					return
