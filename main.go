@@ -47,7 +47,9 @@ func run() error {
 	var ipNet *net.IPNet
 	var lastIp net.IP
 
-	if strings.Index(*address, "/") != -1 {
+	useSubnet := strings.Index(*address, "/") != -1
+
+	if useSubnet {
 		var err error
 
 		ip, ipNet, err = net.ParseCIDR(*address)
@@ -89,7 +91,13 @@ func run() error {
 
 	var i byte
 
-	for i = 1; i <= lastIp[3]; i++ {
+	if useSubnet {
+		i = 1
+	} else {
+		i = lastIp[3]
+	}
+
+	for ; i <= lastIp[3]; i++ {
 		pingIp := fmt.Sprintf("%d.%d.%d.%d", lastIp[0], lastIp[1], lastIp[2], i)
 
 		wg.Add(1)
