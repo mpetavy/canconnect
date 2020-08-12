@@ -118,7 +118,7 @@ func run() error {
 					return
 				}
 
-				if _, ok := err.(common.ErrWatchdog); ok {
+				if _, ok := err.(*common.ErrWatchdog); ok {
 					return
 				}
 			}
