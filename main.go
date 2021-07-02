@@ -97,6 +97,8 @@ func run() error {
 		i = lastIp[3]
 	}
 
+	pingCmd, _ := exec.LookPath("ping")
+
 	for ; i <= lastIp[3]; i++ {
 		pingIp := fmt.Sprintf("%d.%d.%d.%d", lastIp[0], lastIp[1], lastIp[2], i)
 
@@ -108,18 +110,25 @@ func run() error {
 				wg.Done()
 			}()
 
-			common.Debug("%s ...\n", pingIp)
+			if pingCmd != "" {
+				common.Debug("%s ...\n", pingIp)
 
-			cmd := exec.Command("ping.exe", "-n", "1", pingIp)
-
-			err := common.WatchdogCmd(cmd, time.Second)
-			if err != nil {
-				if _, ok := err.(*exec.ExitError); ok {
-					return
+				countFlag := "-n"
+				if !common.IsWindowsOS() {
+					countFlag = "-c"
 				}
 
-				if _, ok := err.(*common.ErrWatchdog); ok {
-					return
+				cmd := exec.Command(pingCmd, countFlag, "1", pingIp)
+
+				err := common.WatchdogCmd(cmd, time.Second*5)
+				if err != nil {
+					if _, ok := err.(*exec.ExitError); ok {
+						return
+					}
+
+					if _, ok := err.(*common.ErrWatchdog); ok {
+						return
+					}
 				}
 			}
 
