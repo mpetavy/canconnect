@@ -120,7 +120,7 @@ func run() error {
 
 				cmd := exec.Command(pingCmd, countFlag, "1", pingIp)
 
-				err := common.WatchdogCmd(cmd, time.Second*5)
+				_, err := common.WatchdogCmd(cmd, time.Second*5)
 				if err != nil {
 					if _, ok := err.(*exec.ExitError); ok {
 						return
@@ -135,7 +135,7 @@ func run() error {
 			pingIp = fmt.Sprintf("%s:%d", pingIp, port)
 
 			if port != -1 {
-				conn, err := net.Dial("tcp", pingIp)
+				conn, err := net.DialTimeout("tcp", pingIp, common.MillisecondToDuration(*common.FlagIoConnectTimeout))
 				if err != nil {
 					return
 				}
