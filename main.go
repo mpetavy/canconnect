@@ -120,7 +120,7 @@ func run() error {
 
 				cmd := exec.Command(pingCmd, countFlag, "1", pingIp)
 
-				_, err := common.WatchdogCmd(cmd, time.Second*5)
+				_, err := common.NewWatchdogCmd(cmd, time.Second*5)
 				if err != nil {
 					if _, ok := err.(*exec.ExitError); ok {
 						return
