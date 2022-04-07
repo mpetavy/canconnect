@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net"
@@ -15,12 +16,14 @@ import (
 
 var (
 	address *string
+	useTls  *bool
 )
 
 func init() {
 	common.Init(false, "1.0.0", "", "", "2019", "Can connect to server:port", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, nil, run, 0)
 
 	address = flag.String("c", "", "server:port to test")
+	useTls = flag.Bool("tls", false, "Use TLS")
 }
 
 func run() error {
@@ -135,13 +138,37 @@ func run() error {
 			pingIp = fmt.Sprintf("%s:%d", pingIp, port)
 
 			if port != -1 {
-				conn, err := net.DialTimeout("tcp", pingIp, common.MillisecondToDuration(*common.FlagIoConnectTimeout))
-				if err != nil {
+				var err error
+				var tlsConfig *tls.Config
+
+				if *useTls {
+					tlsConfig, err = common.NewTlsConfigFromFlags()
+					if common.Error(err) {
+						return
+					}
+				}
+
+				ep, connector, err := common.NewEndpoint(pingIp, true, tlsConfig)
+				if common.Error(err) {
+					return
+				}
+
+				err = ep.Start()
+				if common.Error(err) {
 					return
 				}
 
 				defer func() {
-					common.Error(conn.Close())
+					common.Error(ep.Stop())
+				}()
+
+				connection, err := connector()
+				if common.Error(err) {
+					return
+				}
+
+				defer func() {
+					common.DebugError(connection.Close())
 				}()
 			}
 
