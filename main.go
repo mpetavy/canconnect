@@ -4,14 +4,13 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"github.com/mpetavy/common"
 	"net"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/mpetavy/common"
 )
 
 var (
@@ -26,154 +25,128 @@ func init() {
 	useTls = flag.Bool("tls", false, "Use TLS")
 }
 
+func inc(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
+	}
+}
+
+func process(ip string, port int, tlsConfig *tls.Config, successIps chan string) error {
+	common.Debug("%s ...\n", ip)
+
+	countFlag := "-n"
+	if !common.IsWindowsOS() {
+		countFlag = "-c"
+	}
+
+	cmd := exec.Command("ping", countFlag, "1", ip)
+
+	_, err := common.NewWatchdogCmd(cmd, time.Second*5)
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); ok {
+			return err
+		}
+
+		if _, ok := err.(*common.ErrWatchdog); ok {
+			return err
+		}
+	}
+
+	if port == 0 {
+		successIps <- ip
+
+		return nil
+	}
+
+	pingIp := fmt.Sprintf("%s:%d", ip, port)
+
+	ep, connector, err := common.NewEndpoint(pingIp, true, tlsConfig)
+	if common.Error(err) {
+		return err
+	}
+
+	err = ep.Start()
+	if common.Error(err) {
+		return err
+	}
+
+	defer func() {
+		common.Error(ep.Stop())
+	}()
+
+	connection, err := connector()
+	if common.Error(err) {
+		return err
+	}
+
+	defer func() {
+		common.DebugError(connection.Close())
+	}()
+
+	successIps <- pingIp
+
+	return nil
+}
+
 func run() error {
-	port := -1
+	var host string
+	var port int
+	var portstr string
+	var err error
+	var ips []string
+	var tlsConfig *tls.Config
 
-	p := strings.Index(*address, ":")
-
-	if p != -1 {
-		var err error
-
-		port, err = strconv.Atoi((*address)[p+1:])
-		if err != nil {
+	if *useTls {
+		tlsConfig, err = common.NewTlsConfigFromFlags()
+		if common.Error(err) {
 			return err
-		}
-
-		*address = (*address)[:p]
-
-		if *address == "" {
-			*address = "127.0.0.1"
 		}
 	}
 
-	var ip net.IP
-	var ipNet *net.IPNet
-	var lastIp net.IP
+	if strings.HasPrefix(*address, ":") {
+		*address = "localhost" + *address
+	}
 
-	useSubnet := strings.Index(*address, "/") != -1
-
-	if useSubnet {
-		var err error
-
-		ip, ipNet, err = net.ParseCIDR(*address)
-		if err != nil {
+	host, portstr, err = net.SplitHostPort(*address)
+	if err == nil {
+		port, err = strconv.Atoi(portstr)
+		if common.Error(err) {
 			return err
 		}
 
-		ip = ip.To4()
-
-		ones, bits := ipNet.Mask.Size()
-		mask := net.CIDRMask(ones, bits)
-
-		lastIp := net.IP(make([]byte, 4))
-		for i := range ip {
-			lastIp[i] = ip[i] | ^mask[i]
+		ipaddr, err := net.ResolveIPAddr("", host)
+		if common.Error(err) {
+			return err
 		}
 
-		if lastIp[3] == 255 {
-			lastIp[3]--
-		}
+		ips = append(ips, ipaddr.IP.String())
 	} else {
-		addresses, err := net.LookupHost(*address)
-		if err != nil {
+		cip, cipnet, err := net.ParseCIDR(*address)
+		if common.Error(err) {
 			return err
 		}
-
-		for i := 0; i < len(addresses); i++ {
-			ip = net.ParseIP(addresses[i]).To4()
-
-			if ip != nil {
-				break
-			}
+		for x := cip.Mask(cipnet.Mask); cipnet.Contains(x); inc(x) {
+			ips = append(ips, x.String())
 		}
-		lastIp = ip.To4()
 	}
 
-	successIps := make(chan string, 1000)
 	wg := sync.WaitGroup{}
+	successIps := make(chan string, len(ips))
 
-	var i byte
-
-	if useSubnet || lastIp == nil {
-		i = 1
-	} else {
-		i = lastIp[3]
-	}
-
-	pingCmd, _ := exec.LookPath("ping")
-
-	for ; i <= lastIp[3]; i++ {
-		pingIp := fmt.Sprintf("%d.%d.%d.%d", lastIp[0], lastIp[1], lastIp[2], i)
+	for _, ip := range ips {
+		if strings.HasSuffix(ip, ".0") || strings.HasSuffix(ip, ".255") {
+			continue
+		}
 
 		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		go func(pingIp string) {
-			defer func() {
-				common.Debug("%s ended\n", pingIp)
-				wg.Done()
-			}()
-
-			if pingCmd != "" {
-				common.Debug("%s ...\n", pingIp)
-
-				countFlag := "-n"
-				if !common.IsWindowsOS() {
-					countFlag = "-c"
-				}
-
-				cmd := exec.Command(pingCmd, countFlag, "1", pingIp)
-
-				_, err := common.NewWatchdogCmd(cmd, time.Second*5)
-				if err != nil {
-					if _, ok := err.(*exec.ExitError); ok {
-						return
-					}
-
-					if _, ok := err.(*common.ErrWatchdog); ok {
-						return
-					}
-				}
-			}
-
-			pingIp = fmt.Sprintf("%s:%d", pingIp, port)
-
-			if port != -1 {
-				var err error
-				var tlsConfig *tls.Config
-
-				if *useTls {
-					tlsConfig, err = common.NewTlsConfigFromFlags()
-					if common.Error(err) {
-						return
-					}
-				}
-
-				ep, connector, err := common.NewEndpoint(pingIp, true, tlsConfig)
-				if common.Error(err) {
-					return
-				}
-
-				err = ep.Start()
-				if common.Error(err) {
-					return
-				}
-
-				defer func() {
-					common.Error(ep.Stop())
-				}()
-
-				connection, err := connector()
-				if common.Error(err) {
-					return
-				}
-
-				defer func() {
-					common.DebugError(connection.Close())
-				}()
-			}
-
-			successIps <- pingIp
-		}(pingIp)
+			process(ip, port, tlsConfig, successIps)
+		}()
 	}
 
 	wg.Wait()
