@@ -143,6 +143,8 @@ func run() error {
 
 		wg.Add(1)
 		go func() {
+			defer common.UnregisterGoRoutine(common.RegisterGoRoutine(1))
+
 			defer wg.Done()
 
 			process(ip, port, tlsConfig, successIps)
