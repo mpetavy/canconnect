@@ -19,7 +19,7 @@ var (
 )
 
 func init() {
-	common.Init("canconnect", "1.0.0", "", "", "2019", "Can connect to server:port", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, nil, run, 0)
+	common.Init("canconnect", "", "", "", "2019", "Can connect to server:port", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, nil, run, 0)
 
 	address = flag.String("c", "", "server:port to test")
 	useTls = flag.Bool("tls", false, "Use TLS")
@@ -142,13 +142,13 @@ func run() error {
 		}
 
 		wg.Add(1)
-		go func() {
+		go func(ip string) {
 			defer common.UnregisterGoRoutine(common.RegisterGoRoutine(1))
 
 			defer wg.Done()
 
 			common.Error(process(ip, port, tlsConfig, successIps))
-		}()
+		}(ip)
 	}
 
 	wg.Wait()
