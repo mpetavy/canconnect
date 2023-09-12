@@ -38,7 +38,7 @@ func process(ip string, port int, tlsConfig *tls.Config, successIps chan string)
 	common.Debug("%s ...\n", ip)
 
 	countFlag := "-n"
-	if !common.IsWindowsOS() {
+	if !common.IsWindows() {
 		countFlag = "-c"
 	}
 
