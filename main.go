@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"embed"
 	"flag"
 	"fmt"
 	"github.com/mpetavy/common"
@@ -18,8 +19,11 @@ var (
 	useTls  *bool
 )
 
+//go:embed go.mod
+var resources embed.FS
+
 func init() {
-	common.Init("canconnect", "", "", "", "2019", "Can connect to server:port", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, nil, run, 0)
+	common.Init("", "", "", "", "Can connect to server:port", "", "", "", &resources, nil, nil, run, 0)
 
 	address = flag.String("c", "", "server:port to test")
 	useTls = flag.Bool("tls", false, "Use TLS")
