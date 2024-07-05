@@ -54,7 +54,7 @@ func process(ip string, port int, tlsConfig *tls.Config, successIps chan string)
 			return err
 		}
 
-		if _, ok := err.(*common.ErrWatchdog); ok {
+		if common.IsErrTimeout(err) {
 			return err
 		}
 	}
